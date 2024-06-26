@@ -1,9 +1,14 @@
 #include "spi.h"
 #include "usart.h"
 
-/* SPI1 BISS-C*/
+// 毫秒延时
+void HAL_Delay_us(uint32_t nus);
 
+
+/* SPI1 BISS-C*/
 #ifdef HAL_BISSC_ENABLE
+
+static void HAL_BISSC_reStartAGS(void);
 
 // MB4 Wrap_Function
 void mb4_spi_transfer(uint8_t *data_tx, uint8_t *data_rx, uint16_t datasize)
@@ -33,48 +38,65 @@ void HAL_BISSC_Setup(void)
 	
 	txData[0] = 0x01;
 	mb4_write_registers(0xED, txData, 1); //CFGCH1=0x01 (BiSS C)
-	HAL_Delay(2);
+	HAL_Delay_us(40);
 	txData[0] = 0x08; 
 	mb4_write_registers(0xF5, txData, 1); //CFGIF=0x02  (RS422) + external clock Source CLKIN =0
-	HAL_Delay(2);
+	HAL_Delay_us(40);
 	//Single-Cycle Data: Data channel configuration
 	txData[0] = 0x5B;
 	mb4_write_registers(0xC0, txData, 1); // bit6:ENSCD1=1, bit5-0：SCD data len 26+2= 28, SCDLEN = 0x1C
-	HAL_Delay(2);
+	HAL_Delay_us(40);
 	// CRC Para Setup
 	txData[0] = 0x06;
 	mb4_write_registers(0xC1, txData, 1); //SELCRCS1=0x00, SCRCLEN1=0x06 (6-bit CRC polynomial 0x43)
-	HAL_Delay(2);
+	HAL_Delay_us(40);
 	txData[0] = 0x00;
 	mb4_write_registers(0xC2, txData, 1); //SCRCSTART1(7:0)=0x00 (CRC start value)
-	HAL_Delay(2);
+	HAL_Delay_us(40);
 	txData[0] = 0x00;
 	mb4_write_registers(0xC3, txData, 1); //SCRCSTART1(15:8)=0x00 (CRC start value)
-	HAL_Delay(2);
+	HAL_Delay_us(40);
 
 	//Frame Control: Master configuration
-	txData[0] = 0x04;
-	mb4_write_registers(0xE6, txData, 1); //FREQS=0x04 (2 MHz) SPI Bandwidth
-	HAL_Delay(2);
-	txData[0] = 0x63;
-	mb4_write_registers(0xE8, txData, 1); //FREQAGS=0x63 (10 kHz) 控制RS422的最小循环周期 也就是1ms向传感器自动获取一次数据
-	HAL_Delay(2);
+	txData[0] = 0x4;
+	mb4_write_registers(0xE6, txData, 1); //FREQS=0x04 (2MHz) SPI Bandwidth
+	HAL_Delay_us(40);
+	//txData[0] = 0x63;
+	txData[0] = 0x63; // 1KHz
+	mb4_write_registers(0xE8, txData, 1); //FREQAGS=10KHz 控制RS422的最小循环周期 
+	HAL_Delay_us(40);
 
 	for (readAddr = 0xC0; readAddr < 0xFB; readAddr++) {
 		mb4_read_registers(readAddr, &rData, 1);
 		printf("BISS-C: readAddr 0x%x is 0x%x \r\n", readAddr, rData);
-		HAL_Delay(2);
+	HAL_Delay_us(40);
 	}
+
+	txData[0] = 0x10;
+	mb4_write_registers(0xF4, txData, 1);
+	HAL_Delay_us(200);
 
 	//Reset SVALID flags
 	txData[0] = 0x00;
 	mb4_write_registers(0xF1, txData, 1);
-	HAL_Delay(2);
+	HAL_Delay_us(40);
 	//Start AGS
 	txData[0] = 0x01;
 	mb4_write_registers(0xF4, txData, 1);
-	HAL_Delay(2);
+	HAL_Delay_us(40);
 }
+
+static void HAL_BISSC_reStartAGS(void)
+{
+	uint8_t txData= 0;
+	txData = 0x80;
+	mb4_write_registers(0xF4, &txData, 1);// BREAK INSTR
+	HAL_Delay_us(40);
+	txData = 0x01;
+	mb4_write_registers(0xF4, &txData, 1);// AGS RESET
+	HAL_Delay_us(40);
+}
+
 
 // 获取传感器过程数据
 uint8_t HAL_SG_SenSorAcquire(uint8_t *SG_Data) 
@@ -85,49 +107,46 @@ uint8_t HAL_SG_SenSorAcquire(uint8_t *SG_Data)
 	uint8_t RxData[8] = {0};
 	uint8_t StatusInformationF0 = 0x00;
 	uint8_t StatusInformationF1 = 0x00;
-	uint32_t rotateCnt = 0;
 	uint8_t ret = 0;
 
-	curStatus = 0;
-	mb4_read_registers(0xF0, &curStatus, 1);
-	printf("BISS-C: Read 0xF0 Value: %x \n\r", curStatus);
-
 	//Read Status Information register 0xF0, wait for end of transmission EOT=1
-	while (( StatusInformationF0 & 0x01) == 0) {
-		mb4_read_status(&StatusInformationF0, 1);
+	mb4_read_status(&StatusInformationF0, 1);
+	if (StatusInformationF0 & 0x01 == 0) { 
+		printf("BISS-C: Step 1 EOT != 1 \n\r");
+		goto __end;
 	}
 
-	//Read and reset SVALID flags in Status Information register 0xF1
+	if (StatusInformationF0 & 0x70 != 0x70 ) { // SCDERR OR AGSERR
+		printf("BISS-C: Step 2 ERR Occur! nAGSERR is %d nSCDERR is %d, reStart AGS! \n\r", ((StatusInformationF0 & 0x40) >> 6), ((StatusInformationF0 & 0x10) >> 4));
+		HAL_BISSC_reStartAGS();	
+		goto __end;	
+	}
+
 	mb4_read_registers(0xF1, &StatusInformationF1, 1);
-	printf("BISS-C: Read 0xF1 Value: %x \n\r", StatusInformationF1);
+	if (StatusInformationF1 & 0x02 != 0x02) {  // CRC校验未通过 SVALID0 = 0
+		printf("BISS-C: Step 3 SVALID1 not set 1! reStart AGS! \n\r");
+		HAL_BISSC_reStartAGS();
+		goto __end;
+	}
+	printf("BISS-C:  Step 4 Read 0xF1 Value: %x \n\r", StatusInformationF1);
 	
-	TxData[0] = 0x00;
-	mb4_write_registers(0xF1, TxData, 1); // 读取状态后重置0xF1 SVALID1 reg状态
-
-	if ((StatusInformationF0 & 0x70) == 0x70) { // REGEND, EOT均置1
-		//If Status ok but SVALID flag is not set, restart AGS
-		curStatus = (StatusInformationF1 & 0x02); // bit SVALID1
-		if (curStatus == 0) { // if SVALID1 != 1 And ReStart AGS
-			mb4_read_registers(0x00, TxData, 4);
-			for (cnt = 0;cnt <4; cnt++) {
-				printf("BISS-C: SCDDATA is 0x%x\n\r", TxData[cnt]);
+	// NO Error Occur
+	if ((StatusInformationF0 & 0x70) == 0x70) {  
+		if (StatusInformationF1 & 0x02 == 0) { // if SVALID1 != 1 ReStart AGS
+			printf(" BISS-C:Step 5 Acquire SG Data Failed! StatusInformationF1 is %d \n\r", StatusInformationF1);
+			HAL_BISSC_reStartAGS();
+		} else { 
+			for (cnt = 0; cnt<4; cnt++) {
+				mb4_read_registers(cnt, &SG_Data[cnt], 1);
+				printf(" BISS-C: Step 6 SGData[%d]: %d \n\r", cnt, SG_Data[cnt]);
 			}
-			printf(" BISS-C: Acquire SG Data Failed! SVALID1 is %d \n\r", curStatus);
-			TxData[0] = 0x80;
-			mb4_write_registers(0xF4, TxData, 1);
-			TxData[0] = 0x01;
-			mb4_write_registers(0xF4, TxData, 1);//Restart AGS
-		} else {  //If Status ok and SVALID flag is set, read single-cycle data
-			mb4_read_registers(0x00, SG_Data, 4);
-			printf(" BISS-C: bit SVALID1 Set Success! \n\r");
 		}
+	} else {
+		printf("BISS-C: Step 7 ERROR Occur! Now StatusInformationF0 is 0x%x \n\r", StatusInformationF0);
+		HAL_BISSC_reStartAGS();
 	}
-	else {
-		printf("BISS-C: Data Not Ready \n\r");
-		printf("BISS-C: Now StatusInformationF0 is 0x%x \n\r", StatusInformationF0);
-	}
-	//If Status not ok, check data channel configuration 
-	ret = 0;
+__end:
+	return ret;
 }
 
 void HAL_CTLRegsWrite_Slave0(uint8_t reg_addr, uint8_t reg_data)
@@ -205,3 +224,13 @@ uint8_t HAL_CTLRegs_Read_Slave0(uint8_t readAddr)
 }
 
 #endif
+
+// 毫秒延时
+void HAL_Delay_us(uint32_t nus)
+{
+	HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq()/1000000);
+    //调用系统自带的延时函函数
+	HAL_Delay(nus - 1);
+    //将定时中断恢复为1ms中断
+	HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq()/1000);
+}

@@ -101,9 +101,9 @@ int main(void)
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(600);
+  HAL_Delay(1000);
   #if HAL_BISSC_TEST
-  HAL_BISSC_Setup();
+      HAL_BISSC_Setup();
   #endif
 
   printf("***************NEW BOOT! SystCall: Initial Finish!********** \r\n");
@@ -118,20 +118,8 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     #if HAL_BISSC_TEST
-      //HAL_SG_SenSorAcquire(SG_Data);
-      // for (cnt=0; cnt<4; cnt++) {
-      //   posidataUM |= SG_Data[cnt];
-      //   posidataUM <<= 8;
-      // }
-      // printf("BISS-C: recv posi data is %d \n\r", posidataUM);
-
-      // mb4_read_status(&rData, 1);
-      // printf("BISS-C: Cycle 0xF0 is 0x%x \r\n", rData);
-      // HAL_Delay(2);
-
-      // mb4_read_registers(0xF1, &rData, 1);
-      //  printf("BISS-C: Cycle 0xF1 is 0x%x \r\n", rData);
-      // HAL_Delay(200);
+     HAL_SG_SenSorAcquire(SG_Data);
+     HAL_Delay(200);
     #endif
   }
   /* USER CODE END 3 */

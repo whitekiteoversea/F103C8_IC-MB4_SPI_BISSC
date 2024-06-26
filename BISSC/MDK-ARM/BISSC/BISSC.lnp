@@ -1,0 +1,28 @@
+--cpu Cortex-M3
+"bissc\startup_stm32f103xb.o"
+"bissc\main.o"
+"bissc\stm32f1xx_it.o"
+"bissc\stm32f1xx_hal_msp.o"
+"bissc\stm32f1xx_hal_gpio_ex.o"
+"bissc\stm32f1xx_hal_spi.o"
+"bissc\stm32f1xx_hal.o"
+"bissc\stm32f1xx_hal_rcc.o"
+"bissc\stm32f1xx_hal_rcc_ex.o"
+"bissc\stm32f1xx_hal_gpio.o"
+"bissc\stm32f1xx_hal_dma.o"
+"bissc\stm32f1xx_hal_cortex.o"
+"bissc\stm32f1xx_hal_pwr.o"
+"bissc\stm32f1xx_hal_flash.o"
+"bissc\stm32f1xx_hal_flash_ex.o"
+"bissc\stm32f1xx_hal_exti.o"
+"bissc\stm32f1xx_hal_tim.o"
+"bissc\stm32f1xx_hal_tim_ex.o"
+"bissc\stm32f1xx_hal_uart.o"
+"bissc\system_stm32f1xx.o"
+"bissc\mb4_1sf_driver.o"
+"bissc\spi.o"
+"bissc\usart.o"
+--library_type=microlib --strict --scatter "BISSC\BISSC.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "BISSC.map" -o BISSC\BISSC.axf

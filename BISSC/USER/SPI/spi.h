@@ -3,6 +3,7 @@
 
 #include "stm32f1xx_hal.h"
 #include "mb4_1sf_driver.h"
+#include "stdio.h"	
 	 				    
 #define HAL_BISSC_ENABLE    (1)
 #define HAL_BISSC_TEST      (1)
@@ -31,13 +32,14 @@ enum BISSC_CMD {
 #endif
 
 #ifdef HAL_BISSC_ENABLE
-
-void HAL_BISSC_Setup(void);
-uint8_t HAL_SG_SenSorAcquire(uint8_t *SG_Data); 
-void HAL_CTLRegsWrite_Slave0(uint8_t reg_addr, uint8_t reg_data); // 写寄存器
-uint8_t HAL_CTLRegs_Read_Slave0(uint8_t readAddr);
-
+    void HAL_BISSC_Setup(void);
+    uint8_t HAL_SG_SenSorAcquire(uint8_t *SG_Data); 
+    void HAL_CTLRegsWrite_Slave0(uint8_t reg_addr, uint8_t reg_data); // 写寄存器
+    uint8_t HAL_CTLRegs_Read_Slave0(uint8_t readAddr);
 #endif
+
+// 毫秒延时
+void HAL_Delay_us(uint32_t nus);
 
 extern SPI_HandleTypeDef hspi1;
 		 
