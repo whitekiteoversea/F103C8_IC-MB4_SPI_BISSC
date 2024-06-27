@@ -101,7 +101,7 @@ int main(void)
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(1000);
+  HAL_Delay(2000);
   #if HAL_BISSC_TEST
       HAL_BISSC_Setup();
   #endif

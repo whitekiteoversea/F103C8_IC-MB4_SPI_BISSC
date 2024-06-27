@@ -42,11 +42,13 @@ void HAL_BISSC_Setup(void)
 	txData[0] = 0x08; 
 	mb4_write_registers(0xF5, txData, 1); //CFGIF=0x02  (RS422) + external clock Source CLKIN =0
 	HAL_Delay_us(40);
+
+
+#if BISS_ENABLE_CRC
 	//Single-Cycle Data: Data channel configuration
 	txData[0] = 0x5B;
 	mb4_write_registers(0xC0, txData, 1); // bit6:ENSCD1=1, bit5-0：SCD data len 26+2= 28, SCDLEN = 0x1C
 	HAL_Delay_us(40);
-	// CRC Para Setup
 	txData[0] = 0x06;
 	mb4_write_registers(0xC1, txData, 1); //SELCRCS1=0x00, SCRCLEN1=0x06 (6-bit CRC polynomial 0x43)
 	HAL_Delay_us(40);
@@ -56,6 +58,15 @@ void HAL_BISSC_Setup(void)
 	txData[0] = 0x00;
 	mb4_write_registers(0xC3, txData, 1); //SCRCSTART1(15:8)=0x00 (CRC start value)
 	HAL_Delay_us(40);
+#else
+	//Single-Cycle Data: Data channel configuration
+	txData[0] = 0x61;
+	mb4_write_registers(0xC0, txData, 1); // bit6:ENSCD1=1, bit5-0：SCD data len 26+2+6= 34, SCDLEN = 34-1 = 0x21
+	HAL_Delay_us(40);
+	// disable CRC
+	txData[0] = 0x00;
+	mb4_write_registers(0xC1, txData, 1); //SELCRCS1=0x00, SCRCLEN1=0x00 
+#endif
 
 	//Frame Control: Master configuration
 	txData[0] = 0x4;
@@ -65,10 +76,10 @@ void HAL_BISSC_Setup(void)
 	mb4_write_registers(0xE8, txData, 1); //FREQAGS=10KHz 控制RS422的最小循环周期 
 	HAL_Delay_us(40);
 
-	for (readAddr = 0xC0; readAddr < 0xFB; readAddr++) {
+	for (readAddr = 0xC0; readAddr < 0xFC; readAddr++) {
 		mb4_read_registers(readAddr, &rData, 1);
 		printf("BISS-C: readAddr 0x%x is 0x%x \r\n", readAddr, rData);
-	HAL_Delay_us(40);
+		HAL_Delay_us(40);
 	}
 
 	// INIT
@@ -107,7 +118,14 @@ uint8_t HAL_SG_SenSorAcquire(uint8_t *SG_Data)
 	uint8_t RxData[8] = {0};
 	uint8_t StatusInformationF0 = 0x00;
 	uint8_t StatusInformationF1 = 0x00;
+	uint8_t StatusInformationF2 = 0x00;
 	uint8_t ret = 0;
+	uint8_t rData = 0;
+	uint64_t SGGData = 0;
+
+	uint8_t readAddr = 0xC0;
+	printf("BISS-C:********************************** \r\n");
+	printf("BISS-C: NEW SGDATA REQUEIRE! \r\n");
 
 	//Read Status Information register 0xF0, wait for end of transmission EOT=1
 	mb4_read_status(&StatusInformationF0, 1);
@@ -115,6 +133,10 @@ uint8_t HAL_SG_SenSorAcquire(uint8_t *SG_Data)
 		printf("BISS-C: Step 1 EOT != 1 \n\r");
 		goto __end;
 	}
+
+	mb4_read_registers(0xF1, &StatusInformationF1, 1);
+	mb4_read_registers(0xF2, &StatusInformationF2, 1);
+	printf("BISS-C: 0xF0 0xF1 0xF2 Status are 0x%x, 0x%x, 0x%x\n\r", StatusInformationF0, StatusInformationF1, StatusInformationF2);
 
 	if ((StatusInformationF0 & 0x70) != 0x70 ) { // SCDERR OR AGSERR
 		printf("BISS-C: Step 2 ERR Occur! nAGSERR is %d nSCDERR is %d, reStart AGS! \n\r", ((StatusInformationF0 & 0x40) >> 6), ((StatusInformationF0 & 0x10) >> 4));
@@ -136,10 +158,16 @@ uint8_t HAL_SG_SenSorAcquire(uint8_t *SG_Data)
 			printf(" BISS-C:Step 5 Acquire SG Data Failed! StatusInformationF1 is %d \n\r", StatusInformationF1);
 			HAL_BISSC_reStartAGS();
 		} else { 
-			for (cnt = 0; cnt<4; cnt++) {
+			for (cnt = 0; cnt<5; cnt++) {
 				mb4_read_registers(cnt, &SG_Data[cnt], 1);
-				printf(" BISS-C: Step 6 SGData[%d]: %d \n\r", cnt, SG_Data[cnt]);
 			}
+			for (cnt = 3;cnt>0; cnt--) {
+				SGGData += SG_Data[cnt];
+				if (cnt >1){
+					SGGData <<= 8;
+				}
+			}
+			printf ("SGG_Data is %d um \r\n", (uint32_t)SGGData);
 		}
 	} else {
 		printf("BISS-C: Step 7 ERROR Occur! Now StatusInformationF0 is 0x%x \n\r", StatusInformationF0);
