@@ -39,7 +39,7 @@ void HAL_BISSC_Setup(void)
 	txData[0] = 0x01;
 	mb4_write_registers(0xED, txData, 1); //CFGCH1=0x01 (BiSS C)
 	HAL_Delay_us(40);
-	txData[0] = 0x08; 
+	txData[0] = 0x09;    // 这里需要根据外围电路是否有外部20MHz晶振选择 使用外部晶振则0x08 内部晶振则0x09
 	mb4_write_registers(0xF5, txData, 1); //CFGIF=0x02  (RS422) + external clock Source CLKIN =0
 	HAL_Delay_us(40);
 
